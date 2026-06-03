@@ -120,6 +120,82 @@ nomic_faiss_rag/
 
 ---
 
+## Validation Test Queries
+
+The system is validated using **5 test questions** defined in `test_questions.py`.
+Each question checks that the RAG answer (with document search) contains
+specific expected terms, while the same question asked **without** document
+search must **not** contain those terms (proving the answer came from the
+documents, not the LLM's prior knowledge).
+
+### Query 1 — Literal (R-Square)
+| Field | Value |
+|---|---|
+| **Question** | What does R-Square measure in a regression model? |
+| **Expected terms** | `r-square`, `variance` |
+| **Type** | Literal — uses exact terminology from the source PDF |
+| **Source PDF** | Data Science INterview Questions #Day1.pdf |
+| **Validation** | RAG response must contain "r-square" and "variance"; non-RAG response must contain neither |
+
+### Query 2 — Literal (Faster R-CNN)
+| Field | Value |
+|---|---|
+| **Question** | What does Faster R-CNN use to generate region proposals? |
+| **Expected terms** | `faster`, `r-cnn`, `region` |
+| **Type** | Literal — uses exact terminology from the source PDF |
+| **Source PDF** | Data Science Interview Preparation(#DAY 14).pdf |
+| **Validation** | RAG response must contain "faster", "r-cnn", and "region"; non-RAG response must contain none |
+
+### Query 3 — Literal (Bag-of-Words)
+| Field | Value |
+|---|---|
+| **Question** | What is the Bag-of-Words model used for in text processing? |
+| **Expected terms** | `represent text data` |
+| **Type** | Literal — uses exact terminology from the source PDF |
+| **Source PDF** | Data Science Interview Preparation Questions(#Day06).pdf |
+| **Validation** | RAG response must contain the phrase "represent text data"; non-RAG response must not |
+
+### Query 4 — Semantic (Regularization)
+| Field | Value |
+|---|---|
+| **Question** | How does the model get penalized for including useless predictor variables? |
+| **Expected terms** | `regularization` |
+| **Type** | **Semantic** — question uses completely different vocabulary than the source passage (avoids the word "regularization") |
+| **Source PDF** | Data Science INterview Questions #Day1.pdf |
+| **Validation** | RAG response must mention "regularization"; non-RAG response must not. This proves the semantic retrieval correctly maps a rephrased query to the right document chunk. |
+
+### Query 5 — Semantic (Oops! / Fail videos)
+| Field | Value |
+|---|---|
+| **Question** | What kind of video clips were collected to understand how people make mistakes? |
+| **Expected terms** | `video`, `fail` |
+| **Type** | **Semantic** — question uses "make mistakes" instead of document vocabulary like "fail" |
+| **Source PDF** | Data Science Interview Interview Questions(#Day28).pdf |
+| **Validation** | RAG response must mention "video" and "fail"; non-RAG response must contain neither. This proves the retriever handles conceptual rephrasing. |
+
+### Summary Table
+
+| # | Question | Expected | Semantic | Source Document |
+|---|----------|----------|----------|----------------|
+| 1 | What does R-Square measure in a regression model? | r-square, variance | No | #Day1.pdf |
+| 2 | What does Faster R-CNN use to generate region proposals? | faster, r-cnn, region | No | (#DAY 14).pdf |
+| 3 | What is the Bag-of-Words model used for in text processing? | represent text data | No | (#Day06).pdf |
+| 4 | How does the model get penalized for including useless predictor variables? | regularization | **Yes** | #Day1.pdf |
+| 5 | What kind of video clips were collected to understand how people make mistakes? | video, fail | **Yes** | (#Day28).pdf |
+
+---
+
+## Validation Rules
+
+| Check | Pass condition |
+|---|---|
+| Answer WITH search | All `expected` terms appear in the answer (verified by LLM check) |
+| Answer WITHOUT search | None of the `expected` terms appear in the answer |
+
+All 5 questions must pass both checks for the system to be considered validated.
+
+---
+
 ## Writing Good Test Questions
 
 The plan requires **5 questions**, at least **2 of which must be "semantic"**
@@ -144,17 +220,6 @@ Question (NOT semantic): "What dropout rate was applied?"
 Question (semantic): "What technique prevented the network from relying on specific neurons?"
   → zero overlap in meaningful words → SEMANTIC ✓
 ```
-
----
-
-## Validation Rules
-
-| Check | Pass condition |
-|---|---|
-| Answer WITH search | All `expected` terms appear in the answer |
-| Answer WITHOUT search | None of the `expected` terms appear in the answer |
-
-All 5 questions must pass both checks for the system to be considered validated.
 
 ---
 
