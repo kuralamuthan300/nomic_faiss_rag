@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nomic + FAISS RAG — Document Q&amp;A</title>
+  <meta name="description" content="Ask questions about your PDF documents using Nomic embeddings, FAISS vector search, and LLM Gateway V7." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0d14;
+      --surface:   rgba(255,255,255,0.04);
+      --border:    rgba(255,255,255,0.09);
+      --accent:    #6c63ff;
+      --accent2:   #00c8ff;
+      --green:     #22d3a0;
+      --red:       #f87171;
+      --yellow:    #fbbf24;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --radius:    14px;
+      --shadow:    0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    html { font-size: 15px; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 20% -10%, rgba(108,99,255,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 110%, rgba(0,200,255,0.12) 0%, transparent 60%);
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header { text-align: center; margin-bottom: 2.5rem; }
+    .logo {
+      display: inline-flex; align-items: center; gap: 0.55rem;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--accent);
+      background: rgba(108,99,255,0.12); border: 1px solid rgba(108,99,255,0.3);
+      padding: 0.3rem 0.8rem; border-radius: 999px; margin-bottom: 1.1rem;
+    }
+    h1 {
+      font-size: 2.2rem; font-weight: 700; letter-spacing: -0.03em;
+      background: linear-gradient(120deg, #fff 30%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2; margin-bottom: 0.6rem;
+    }
+    .subtitle { color: var(--muted); font-size: 0.9rem; }
+    .stats-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.8rem; color: var(--green); margin-top: 0.7rem;
+      background: rgba(34,211,160,0.08); border: 1px solid rgba(34,211,160,0.25);
+      padding: 0.25rem 0.75rem; border-radius: 999px;
+    }
+
+    /* ── Alert banner ───────────────────────────────────────────── */
+    .alert {
+      background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35);
+      border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+      color: var(--red); font-size: 0.875rem; line-height: 1.5;
+    }
+    .alert strong { display: block; margin-bottom: 0.25rem; font-size: 0.95rem; }
+
+    /* ── Cards ──────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: rgba(255,255,255,0.14); }
+
+    .card-title {
+      font-size: 1.05rem; font-weight: 600; margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .card-title .icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+    }
+    .icon-purple { background: rgba(108,99,255,0.2); }
+    .icon-cyan   { background: rgba(0,200,255,0.15); }
+
+    /* ── Form elements ──────────────────────────────────────────── */
+    label { display: block; font-size: 0.8rem; font-weight: 500;
+            color: var(--muted); margin-bottom: 0.4rem; letter-spacing: 0.04em; text-transform: uppercase; }
+
+    textarea {
+      width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-family: inherit;
+      font-size: 0.9rem; padding: 0.75rem 1rem; resize: vertical; min-height: 90px;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(108,99,255,0.2);
+    }
+    textarea::placeholder { color: var(--muted); }
+
+    /* ── Toggle switch ──────────────────────────────────────────── */
+    .toggle-row {
+      display: flex; align-items: center; gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .toggle-label { font-size: 0.875rem; color: var(--text); }
+    .toggle-sub   { font-size: 0.75rem;  color: var(--muted); }
+
+    .toggle {
+      position: relative; width: 44px; height: 24px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: rgba(255,255,255,0.12);
+      border-radius: 24px; cursor: pointer;
+      transition: background 0.25s;
+    }
+    .slider::before {
+      content: ""; position: absolute;
+      width: 18px; height: 18px; border-radius: 50%;
+      left: 3px; top: 3px;
+      background: #fff; transition: transform 0.25s;
+    }
+    input:checked + .slider { background: var(--accent); }
+    input:checked + .slider::before { transform: translateX(20px); }
+
+    /* ── Buttons ────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+      padding: 0.65rem 1.4rem; border-radius: 10px; font-family: inherit;
+      font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none;
+      transition: transform 0.15s, opacity 0.15s, box-shadow 0.2s;
+    }
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff; box-shadow: 0 4px 16px rgba(108,99,255,0.35);
+    }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(108,99,255,0.5); }
+
+    .btn-cyan {
+      background: linear-gradient(135deg, var(--accent2), #06b6d4);
+      color: #000; box-shadow: 0 4px 16px rgba(0,200,255,0.25);
+    }
+    .btn-cyan:hover:not(:disabled) { box-shadow: 0 6px 22px rgba(0,200,255,0.4); }
+
+    /* ── Answer area ────────────────────────────────────────────── */
+    #answer-box {
+      margin-top: 1.25rem; padding: 1.1rem 1.25rem;
+      background: rgba(0,0,0,0.25); border: 1px solid var(--border);
+      border-radius: 10px; font-size: 0.88rem; line-height: 1.7;
+      white-space: pre-wrap; word-break: break-word;
+      display: none;
+    }
+    #answer-box.visible { display: block; }
+    #answer-box.error-state { border-color: rgba(248,113,113,0.4); color: var(--red); }
+
+    .answer-text { margin-bottom: 1rem; }
+
+    .sources-section { margin-top: 0.75rem; }
+    .sources-title {
+      font-size: 0.72rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem;
+    }
+    .source-chip {
+      display: flex; flex-direction: column; gap: 0.15rem;
+      background: rgba(108,99,255,0.08); border: 1px solid rgba(108,99,255,0.22);
+      border-radius: 8px; padding: 0.6rem 0.85rem; margin-bottom: 0.5rem;
+      font-size: 0.78rem;
+    }
+    .source-chip .src-meta { color: var(--accent); font-weight: 600; }
+    .source-chip .src-preview { color: var(--muted); margin-top: 0.15rem; }
+
+    /* ── Spinner ────────────────────────────────────────────────── */
+    .spinner {
+      display: none; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    .spinner.active { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Test suite ─────────────────────────────────────────────── */
+    #test-status {
+      margin-bottom: 1rem; padding: 0.75rem 1rem; border-radius: 10px;
+      font-size: 0.875rem; font-weight: 600; display: none;
+    }
+    #test-status.pass {
+      background: rgba(34,211,160,0.1); border: 1px solid rgba(34,211,160,0.35);
+      color: var(--green); display: block;
+    }
+    #test-status.fail {
+      background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.35);
+      color: var(--red); display: block;
+    }
+
+    #test-table-wrap { overflow-x: auto; }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.8rem; display: none;
+    }
+    table.visible { display: table; }
+    thead th {
+      text-align: left; padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.7rem;
+    }
+    tbody tr { transition: background 0.15s; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    td {
+      padding: 0.65rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: top; line-height: 1.5;
+    }
+    .pill {
+      display: inline-block; padding: 0.2rem 0.55rem;
+      border-radius: 999px; font-weight: 600; font-size: 0.72rem;
+    }
+    .pill-pass { background: rgba(34,211,160,0.15); color: var(--green); border: 1px solid rgba(34,211,160,0.3); }
+    .pill-fail { background: rgba(248,113,113,0.15); color: var(--red);   border: 1px solid rgba(248,113,113,0.3); }
+    .pill-sem  { background: rgba(251,191,36,0.12);  color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+    .preview-text { color: var(--muted); font-size: 0.77rem; font-style: italic; }
+
+    /* ── Footer ─────────────────────────────────────────────────── */
+    footer {
+      text-align: center; margin-top: 3rem;
+      font-size: 0.75rem; color: var(--muted);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      h1 { font-size: 1.6rem; }
+      .card { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">⚡ Nomic + FAISS RAG</div>
+    <h1>Document Intelligence</h1>
+    <p class="subtitle">Ask questions answered from your PDF library using semantic search</p>
+
+    {% if not startup_error and chunk_count > 0 %}
+    <div class="stats-badge">
+      ✦ {{ chunk_count }} chunks indexed from {{ doc_count }} document{% if doc_count != 1 %}s{% endif %}
+    </div>
+    {% endif %}
+  </header>
+
+  <!-- Startup error banner -->
+  {% if startup_error %}
+  <div class="alert" role="alert">
+    <strong>⚠ Service Error</strong>
+    {{ startup_error }}
+  </div>
+  {% endif %}
+
+  <!-- ── Section 1: Ask a question ─────────────────────────────── -->
+  <div class="card" id="ask-card">
+    <div class="card-title">
+      <span class="icon icon-purple">🔍</span>
+      Ask a Question
+    </div>
+
+    <label for="question-input">Your question</label>
+    <textarea
+      id="question-input"
+      placeholder="e.g. What technique prevented the network from becoming too reliant on specific neurons?"
+      rows="3"
+    ></textarea>
+
+    <div class="toggle-row">
+      <label class="toggle" for="rag-toggle" title="Toggle document search">
+        <input type="checkbox" id="rag-toggle" checked />
+        <span class="slider"></span>
+      </label>
+      <div>
+        <div class="toggle-label" id="toggle-label">Document Search: <strong>ON</strong></div>
+        <div class="toggle-sub">When ON, answer is grounded in your PDFs</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="ask-btn" onclick="askQuestion()">
+      <span class="spinner" id="ask-spinner"></span>
+      <span id="ask-btn-text">Ask</span>
+    </button>
+
+    <!-- Answer display -->
+    <div id="answer-box" role="region" aria-live="polite">
+      <div class="answer-text" id="answer-text"></div>
+      <div class="sources-section" id="sources-section"></div>
+    </div>
+  </div>
+
+  <!-- ── Section 2: Validation Tests ──────────────────────────── -->
+  <div class="card" id="tests-card">
+    <div class="card-title">
+      <span class="icon icon-cyan">🧪</span>
+      Validation Test Suite
+    </div>
+
+    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:1.1rem;">
+      Runs all 5 test questions automatically — checks that answers with document
+      search contain the expected terms, and answers without document search do not.
+    </p>
+
+    <button class="btn btn-cyan" id="test-btn" onclick="runTests()">
+      <span class="spinner" id="test-spinner"></span>
+      <span id="test-btn-text">Run All Tests</span>
+    </button>
+
+    <div id="test-status"></div>
+
+    <div id="test-table-wrap">
+      <table id="test-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Question</th>
+            <th>Expected Terms</th>
+            <th>Type</th>
+            <th>With Search</th>
+            <th>Without Search</th>
+            <th>Overall</th>
+          </tr>
+        </thead>
+        <tbody id="test-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>
+    Powered by <a href="http://localhost:8107" target="_blank">LLM Gateway V7</a>
+    &nbsp;·&nbsp; Nomic Embed Text &nbsp;·&nbsp; FAISS
+  </footer>
+
+</div>
+
+<script>
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+
+const $ = id => document.getElementById(id);
+
+function setLoading(spinId, btnTextId, btnId, loading, label) {
+  const spinner = $(spinId), btnText = $(btnTextId), btn = $(btnId);
+  if (loading) {
+    spinner.classList.add('active');
+    btnText.textContent = label;
+    btn.disabled = true;
+  } else {
+    spinner.classList.remove('active');
+    btn.disabled = false;
+  }
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Toggle label ───────────────────────────────────────────────────── */
+
+$('rag-toggle').addEventListener('change', function () {
+  $('toggle-label').innerHTML = this.checked
+    ? 'Document Search: <strong>ON</strong>'
+    : 'Document Search: <strong style="color:var(--muted)">OFF</strong>';
+});
+
+/* ── Ask a question ─────────────────────────────────────────────────── */
+
+async function askQuestion() {
+  const question = $('question-input').value.trim();
+  if (!question) {
+    showAnswerError('Please enter a question.');
+    return;
+  }
+
+  const useRag = $('rag-toggle').checked;
+  setLoading('ask-spinner', 'ask-btn-text', 'ask-btn', true, 'Thinking…');
+  $('answer-box').className = '';                 // hide
+  $('answer-box').classList.remove('visible', 'error-state');
+
+  try {
+    const resp = await fetch('/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, use_rag: useRag }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      showAnswerError(data.error || `Server error ${resp.status}`);
+      return;
+    }
+
+    renderAnswer(data);
+  } catch (e) {
+    showAnswerError('Network error: ' + e.message);
+  } finally {
+    setLoading('ask-spinner', 'ask-btn-text', 'ask-btn', false, 'Ask');
+  }
+}
+
+function showAnswerError(msg) {
+  $('answer-text').textContent = '⚠ ' + msg;
+  $('sources-section').innerHTML = '';
+  const box = $('answer-box');
+  box.classList.add('visible', 'error-state');
+}
+
+function renderAnswer(data) {
+  $('answer-text').textContent = data.answer || '(No answer returned)';
+
+  const srcSec = $('sources-section');
+  srcSec.innerHTML = '';
+
+  if (data.sources && data.sources.length > 0) {
+    const title = document.createElement('div');
+    title.className = 'sources-title';
+    title.textContent = `📄 ${data.sources.length} document segment${data.sources.length > 1 ? 's' : ''} used`;
+    srcSec.appendChild(title);
+
+    data.sources.forEach((s, i) => {
+      const chip = document.createElement('div');
+      chip.className = 'source-chip';
+      chip.innerHTML =
+        `<span class="src-meta">Source ${i+1}: ${escHtml(s.source)} — chunk ${escHtml(s.chunk_id)} — relevance ${s.score.toFixed(3)}</span>` +
+        `<span class="src-preview">"${escHtml(s.preview)}…"</span>`;
+      srcSec.appendChild(chip);
+    });
+  }
+
+  const box = $('answer-box');
+  box.classList.add('visible');
+  box.classList.remove('error-state');
+}
+
+/* ── Allow Enter (with Shift for newline) to submit ─────────────────── */
+$('question-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    askQuestion();
+  }
+});
+
+/* ── Run validation tests ───────────────────────────────────────────── */
+
+async function runTests() {
+  setLoading('test-spinner', 'test-btn-text', 'test-btn', true, 'Running tests…');
+  $('test-status').className = '';
+  $('test-table').classList.remove('visible');
+
+  try {
+    const resp = await fetch('/run_tests', { method: 'POST' });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      const st = $('test-status');
+      st.className = 'fail';
+      st.textContent = '⚠ ' + (data.error || `Server error ${resp.status}`);
+      return;
+    }
+
+    renderTestResults(data);
+  } catch (e) {
+    const st = $('test-status');
+    st.className = 'fail';
+    st.textContent = '⚠ Network error: ' + e.message;
+  } finally {
+    setLoading('test-spinner', 'test-btn-text', 'test-btn', false, 'Run All Tests');
+  }
+}
+
+function renderTestResults(data) {
+  const st = $('test-status');
+  const passed = data.results.filter(r => r.both_passed).length;
+  const total  = data.results.length;
+
+  if (data.all_passed) {
+    st.className = 'pass';
+    st.textContent = `✓ All ${total} tests passed — system is working correctly.`;
+  } else {
+    st.className = 'fail';
+    st.textContent = `✗ ${passed} / ${total} tests passed. See table below.`;
+  }
+
+  const tbody = $('test-body');
+  tbody.innerHTML = '';
+
+  data.results.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    const semanticPill = r.semantic
+      ? '<span class="pill pill-sem">Semantic</span>'
+      : '<span class="pill" style="background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border)">Literal</span>';
+
+    const ragPill   = r.rag_passed   ? '<span class="pill pill-pass">PASS</span>' : '<span class="pill pill-fail">FAIL</span>';
+    const plainPill = r.plain_passed ? '<span class="pill pill-pass">PASS</span>' : '<span class="pill pill-fail">FAIL</span>';
+    const totalPill = r.both_passed  ? '<span class="pill pill-pass">✓ PASS</span>' : '<span class="pill pill-fail">✗ FAIL</span>';
+
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>
+        <div style="margin-bottom:0.35rem">${escHtml(r.question)}</div>
+        <div class="preview-text">With: "${escHtml(r.rag_answer.substring(0,120))}…"</div>
+        <div class="preview-text" style="margin-top:0.2rem">Without: "${escHtml(r.plain_answer.substring(0,120))}…"</div>
+      </td>
+      <td><code style="font-size:0.75rem;color:var(--accent2)">${escHtml(r.expected.join(', '))}</code></td>
+      <td>${semanticPill}</td>
+      <td>${ragPill}</td>
+      <td>${plainPill}</td>
+      <td>${totalPill}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  $('test-table').classList.add('visible');
+}
+</script>
+</body>
+</html>
