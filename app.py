@@ -2,7 +2,7 @@
 app.py — Gradio UI for the Nomic + FAISS RAG application.
 
 Tabs:
-  1. Ask a Question  — text input, RAG toggle, answer + source chips
+  1. Ask a Question  — text input, RAG answer + source chips
   2. Validation Tests — run all 5 questions, results in a DataFrame table
 
 Startup (runs once before the UI is shown):
@@ -13,6 +13,7 @@ Startup (runs once before the UI is shown):
 
 from __future__ import annotations
 
+import html
 import sys
 from pathlib import Path
 
@@ -24,7 +25,6 @@ from ingest import load_documents, DOCS_DIR
 from embedder import build_index
 from rag import (
     answer_with_rag,
-    answer_without_rag,
     check_embed_service,
     check_chat_service,
 )
@@ -127,7 +127,7 @@ def _format_sources_html(sources: list[dict]) -> str:
         f"📄 {len(sources)} document segment{'s' if len(sources) != 1 else ''} used</div>"
     )
     for i, s in enumerate(sources, 1):
-        preview = s["preview"].replace("<", "&lt;").replace(">", "&gt;")
+        preview = html.escape(s["preview"])
         parts.append(
             f"<div class='source-block'>"
             f"<div class='src-meta'>Source {i}: {s['source']} — "
@@ -139,10 +139,10 @@ def _format_sources_html(sources: list[dict]) -> str:
     return "".join(parts)
 
 
-def ask_question(question: str, use_rag: bool) -> tuple[str, str]:
+def ask_question(question: str) -> tuple[str, str]:
     """
     Returns (answer_text, sources_html).
-    Called by the Gradio submit button.
+    Always uses RAG (document search) to answer.
     """
     question = (question or "").strip()
     if not question:
@@ -151,13 +151,10 @@ def ask_question(question: str, use_rag: bool) -> tuple[str, str]:
     if STARTUP_ERROR:
         return f"⚠ Service error:\n{STARTUP_ERROR}", ""
 
-    if use_rag:
-        if INDEX_STORE is None:
-            return "⚠ Index not available — check startup logs.", ""
-        result = answer_with_rag(question, INDEX_STORE)
-    else:
-        result = answer_without_rag(question)
+    if INDEX_STORE is None:
+        return "⚠ Index not available — check startup logs.", ""
 
+    result = answer_with_rag(question, INDEX_STORE)
     sources_html = _format_sources_html(result.get("sources", []))
     return result["answer"], sources_html
 
@@ -169,7 +166,7 @@ def ask_question(question: str, use_rag: bool) -> tuple[str, str]:
 def run_tests() -> tuple[str, pd.DataFrame]:
     """
     Returns (summary_markdown, results_dataframe).
-    Called by the Gradio button.
+    Tests that RAG answers contain the expected terms from the documents.
     """
     if STARTUP_ERROR:
         return f"⚠ **Service error:** {STARTUP_ERROR}", pd.DataFrame()
@@ -182,35 +179,23 @@ def run_tests() -> tuple[str, pd.DataFrame]:
     for i, tq in enumerate(TEST_QUESTIONS, 1):
         question    = tq["question"]
         expected    = [e.lower() for e in tq["expected"]]
-        is_semantic = tq.get("semantic", False)
 
-        # with RAG
         rag_res    = answer_with_rag(question, INDEX_STORE)
         rag_answer = rag_res["answer"].lower()
         rag_passed = all(term in rag_answer for term in expected)
 
-        # without RAG
-        plain_res    = answer_without_rag(question)
-        plain_answer = plain_res["answer"].lower()
-        plain_passed = not any(term in plain_answer for term in expected)
-
-        both = rag_passed and plain_passed
-        if not both:
+        if not rag_passed:
             all_passed = False
 
         rows.append({
-            "#":              i,
-            "Question":       question[:90] + ("…" if len(question) > 90 else ""),
-            "Expected":       ", ".join(expected),
-            "Type":           "Semantic" if is_semantic else "Literal",
-            "With Search":    "✓ PASS" if rag_passed   else "✗ FAIL",
-            "Without Search": "✓ PASS" if plain_passed else "✗ FAIL",
-            "Overall":        "✓ PASS" if both         else "✗ FAIL",
-            "With Answer":    rag_res["answer"][:200],
-            "Without Answer": plain_res["answer"][:200],
+            "#":            i,
+            "Question":     question[:90] + ("…" if len(question) > 90 else ""),
+            "Expected":     ", ".join(expected),
+            "Result":       "✓ PASS" if rag_passed else "✗ FAIL",
+            "Answer":       rag_res["answer"][:400],
         })
 
-    passed_count = sum(1 for r in rows if r["Overall"] == "✓ PASS")
+    passed_count = sum(1 for r in rows if r["Result"] == "✓ PASS")
     total        = len(rows)
 
     if all_passed:
@@ -264,24 +249,15 @@ def build_ui() -> gr.Blocks:
 
         # ── Tab 1 — Ask ──────────────────────────────────────────────────
         with gr.Tab("🔍 Ask a Question"):
-            with gr.Row():
-                with gr.Column(scale=3):
-                    question_box = gr.Textbox(
-                        label="Your Question",
-                        placeholder=(
-                            "e.g. What mechanism prevented the network from "
-                            "over-relying on specific neurons?"
-                        ),
-                        lines=3,
-                        elem_id="question-input",
-                    )
-                with gr.Column(scale=1, min_width=160):
-                    rag_toggle = gr.Checkbox(
-                        value=True,
-                        label="Document Search ON",
-                        info="Uncheck to answer from LLM memory only",
-                        elem_id="rag-toggle",
-                    )
+            question_box = gr.Textbox(
+                label="Your Question",
+                placeholder=(
+                    "e.g. What mechanism prevented the network from "
+                    "over-relying on specific neurons?"
+                ),
+                lines=3,
+                elem_id="question-input",
+            )
 
             ask_btn = gr.Button("Ask", variant="primary", elem_id="ask-btn")
 
@@ -296,28 +272,21 @@ def build_ui() -> gr.Blocks:
 
             ask_btn.click(
                 fn=ask_question,
-                inputs=[question_box, rag_toggle],
+                inputs=[question_box],
                 outputs=[answer_out, sources_out],
                 api_name="ask",
             )
-            # Also submit on Enter
             question_box.submit(
                 fn=ask_question,
-                inputs=[question_box, rag_toggle],
+                inputs=[question_box],
                 outputs=[answer_out, sources_out],
-            )
-
-            gr.Markdown(
-                "> **Tip:** Ask the same question twice — once with Search ON, "
-                "once with Search OFF — to see the difference RAG makes."
             )
 
         # ── Tab 2 — Tests ────────────────────────────────────────────────
         with gr.Tab("🧪 Validation Tests"):
             gr.Markdown(
                 "Runs all 5 test questions automatically.\n\n"
-                "- **With Search** — answer must contain all expected terms.\n"
-                "- **Without Search** — answer must NOT contain any expected terms.\n"
+                "- Tests verify that the RAG answer contains all expected terms from the documents.\n"
                 "- Edit `test_questions.py` to add facts from your own PDFs."
             )
 
@@ -329,12 +298,9 @@ def build_ui() -> gr.Blocks:
 
             results_df = gr.Dataframe(
                 headers=[
-                    "#", "Question", "Expected", "Type",
-                    "With Search", "Without Search", "Overall",
-                    "With Answer", "Without Answer",
+                    "#", "Question", "Expected", "Result", "Answer",
                 ],
-                datatype=["number", "str", "str", "str",
-                          "str", "str", "str", "str", "str"],
+                datatype=["number", "str", "str", "str", "str"],
                 interactive=False,
                 wrap=True,
                 elem_id="results-table",
