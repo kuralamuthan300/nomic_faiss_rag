@@ -29,7 +29,7 @@ TEST_QUESTIONS = [
     # Question 3 — Bag-of-Words (in Data Science Interview Preparation Questions(#Day06).pdf)
     {
         "question": "What is the Bag-of-Words model used for in text processing?",
-        "expected": ["bag", "words", "vector"],
+        "expected": ["represent text data"],
         "semantic": False,
     },
 
