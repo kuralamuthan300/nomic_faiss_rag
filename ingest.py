@@ -1,10 +1,10 @@
 """
 ingest.py — Read PDFs from the docs/ folder and split into text chunks.
 
-Splitting strategy (matching the gateway README recommendation):
+Splitting strategy:
   1. Split on double-newline (paragraph boundary).
-  2. If a paragraph is still > MAX_CHARS, split on sentence boundaries (". ").
-  3. If a sentence is still > MAX_CHARS, hard-cut at MAX_CHARS.
+  2. Split each paragraph into words.
+  3. Build chunks of at most MAX_WORDS words, with OVERLAP_WORDS overlap between consecutive chunks.
 
 Each chunk is tagged:
   {
@@ -19,56 +19,53 @@ import sys
 from pathlib import Path
 
 DOCS_DIR = Path(__file__).parent / "docs"
-MAX_CHARS = 3000   # well under the gateway's 8000-char limit
+MAX_WORDS = 400       # target words per chunk
+OVERLAP_WORDS = 80    # words of overlap between consecutive chunks
 
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 
-def _split_paragraph(para: str) -> list[str]:
-    """Split one paragraph into sentence-level pieces, then hard-cut if needed."""
-    # naive sentence split: ". " or "? " or "! "
-    sentences = re.split(r'(?<=[.?!])\s+', para.strip())
-    chunks, buf = [], ""
-    for sent in sentences:
-        if len(buf) + len(sent) + 1 <= MAX_CHARS:
-            buf = (buf + " " + sent).strip()
-        else:
-            if buf:
-                chunks.append(buf)
-            # hard-cut a single sentence that is too long
-            while len(sent) > MAX_CHARS:
-                chunks.append(sent[:MAX_CHARS])
-                sent = sent[MAX_CHARS:]
-            buf = sent
-    if buf:
-        chunks.append(buf)
-    return chunks
-
-
 def _chunk_text(text: str) -> list[str]:
-    """Split a full-document text into chunks respecting MAX_CHARS."""
+    """Split text into chunks of at most MAX_WORDS words with OVERLAP_WORDS overlap."""
     paragraphs = re.split(r'\n{2,}', text)
-    chunks, buf = [], ""
+    all_words = []
     for para in paragraphs:
         para = para.strip()
         if not para:
             continue
-        if len(para) > MAX_CHARS:
-            # flush current buffer first
-            if buf:
-                chunks.append(buf)
-                buf = ""
-            chunks.extend(_split_paragraph(para))
-        elif len(buf) + len(para) + 2 <= MAX_CHARS:
-            buf = (buf + "\n\n" + para).strip()
-        else:
-            if buf:
-                chunks.append(buf)
-            buf = para
-    if buf:
-        chunks.append(buf)
+        # Split paragraph into words (preserve spacing info via joins later)
+        words = para.split()
+        if not words:
+            continue
+        all_words.append(words)
+
+    if not all_words:
+        return []
+
+    # Flatten word lists into a single list, tracking paragraph boundaries
+    # We'll use a marker for paragraph breaks
+    flat_words = []
+    for i, wlist in enumerate(all_words):
+        if i > 0:
+            flat_words.append("__PARA_BREAK__")
+        flat_words.extend(wlist)
+
+    if MAX_WORDS <= 0:
+        return [" ".join(flat_words).replace(" __PARA_BREAK__ ", "\n\n")]
+
+    chunks = []
+    start = 0
+    while start < len(flat_words):
+        end = min(start + MAX_WORDS, len(flat_words))
+        # Build the chunk text from flat_words[start:end]
+        segment_words = flat_words[start:end]
+        # Reconstruct text: replace paragraph markers with double newline
+        chunk_text = " ".join(segment_words).replace(" __PARA_BREAK__ ", "\n\n")
+        chunks.append(chunk_text)
+        start += MAX_WORDS - OVERLAP_WORDS
+
     return chunks
 
 

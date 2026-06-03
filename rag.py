@@ -11,8 +11,7 @@ Without RAG:
   1. Send the question directly to the LLM Gateway V7 (/v1/chat).
   2. Return just the answer text.
 
-Both paths use the gateway's auto_route="memory" hint so the gateway picks the
-appropriate worker model based on the prompt size.
+Both paths explicitly use Ollama (provider "o") as specified in the project config.
 """
 
 from __future__ import annotations
@@ -20,14 +19,17 @@ from __future__ import annotations
 import httpx
 
 GATEWAY_CHAT_URL = "http://localhost:8107/v1/chat"
-TOP_K = 3
+TOP_K = 7
 
 RAG_SYSTEM = (
     "You are a precise question-answering assistant. "
     "Answer the user's question using ONLY the provided document context. "
     "If the context does not contain the answer, say: "
     "\"The documents do not contain enough information to answer this question.\" "
-    "Do not use any prior knowledge."
+    "Do not use any prior knowledge. "
+    "When the answer contains specific terms, numbers, or named concepts from the "
+    "context, include them EXACTLY as they appear in the document. Do not paraphrase "
+    "or rephrase specific terminology."
 )
 
 PLAIN_SYSTEM = (
@@ -40,13 +42,13 @@ PLAIN_SYSTEM = (
 # ---------------------------------------------------------------------------
 
 def _chat(prompt: str, system: str) -> str:
-    """POST to /v1/chat and return the text field."""
+    """POST to /v1/chat and return the text field. Uses Ollama (local) as specified."""
     body = {
         "prompt": prompt,
         "system": system,
         "max_tokens": 1024,
         "temperature": 0.7,
-        "auto_route": "memory",
+        "provider": "o",
     }
     try:
         r = httpx.post(GATEWAY_CHAT_URL, json=body, timeout=120)

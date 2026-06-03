@@ -52,6 +52,15 @@ BANNER_CSS = """
 </style>
 """
 
+CUSTOM_CSS = """
+.gradio-container { max-width: 900px !important; margin: 0 auto; }
+.gr-button-primary { background: linear-gradient(135deg,#6c63ff,#8b5cf6) !important;
+                     border: none !important; color: #fff !important; }
+.gr-button-secondary { background: linear-gradient(135deg,#00c8ff,#06b6d4) !important;
+                       border: none !important; color: #000 !important; }
+footer { display: none !important; }
+"""
+
 
 # ---------------------------------------------------------------------------
 # startup — runs before the UI is served
@@ -242,29 +251,8 @@ def _status_banner() -> str:
 # ---------------------------------------------------------------------------
 
 def build_ui() -> gr.Blocks:
-    custom_css = """
-    .gradio-container { max-width: 900px !important; margin: 0 auto; }
-    .gr-button-primary { background: linear-gradient(135deg,#6c63ff,#8b5cf6) !important;
-                         border: none !important; color: #fff !important; }
-    .gr-button-secondary { background: linear-gradient(135deg,#00c8ff,#06b6d4) !important;
-                           border: none !important; color: #000 !important; }
-    footer { display: none !important; }
-    """
-
     with gr.Blocks(
         title="Nomic + FAISS RAG",
-        theme=gr.themes.Base(
-            primary_hue=gr.themes.colors.purple,
-            secondary_hue=gr.themes.colors.cyan,
-            neutral_hue=gr.themes.colors.slate,
-            font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui"],
-        ).set(
-            body_background_fill="*neutral_950",
-            block_background_fill="*neutral_900",
-            block_border_color="*neutral_800",
-            input_background_fill="*neutral_800",
-        ),
-        css=custom_css,
     ) as demo:
 
         gr.HTML(BANNER_CSS)
@@ -302,7 +290,6 @@ def build_ui() -> gr.Blocks:
                     label="Answer",
                     lines=6,
                     interactive=False,
-                    show_copy_button=True,
                     elem_id="answer-out",
                 )
                 sources_out = gr.HTML(label="Sources used", elem_id="sources-out")
@@ -372,4 +359,19 @@ if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 7860
     print(f"[app] Launching Gradio on http://localhost:{port}")
     ui = build_ui()
-    ui.launch(server_name="0.0.0.0", server_port=port, show_api=False)
+    ui.launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        theme=gr.themes.Base(
+            primary_hue=gr.themes.colors.purple,
+            secondary_hue=gr.themes.colors.cyan,
+            neutral_hue=gr.themes.colors.slate,
+            font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui"],
+        ).set(
+            body_background_fill="*neutral_950",
+            block_background_fill="*neutral_900",
+            block_border_color="*neutral_800",
+            input_background_fill="*neutral_800",
+        ),
+        css=CUSTOM_CSS,
+    )

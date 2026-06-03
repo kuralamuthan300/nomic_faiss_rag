@@ -18,7 +18,7 @@ Public API:
 from __future__ import annotations
 
 import sys
-import time
+import time as _time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -34,25 +34,41 @@ TOP_K_DEFAULT = 3
 # helpers
 # ---------------------------------------------------------------------------
 
-def _embed(text: str, task_type: str = "retrieval_document") -> list[float]:
+
+def _embed(text: str, task_type: str = "retrieval_document", max_retries: int = 3) -> list[float]:
     """
     Call the gateway embed endpoint and return a 768-dim float vector.
+    Retries up to ``max_retries`` times on 503 with exponential backoff.
     Raises httpx.HTTPStatusError on non-2xx; raises RuntimeError on dim mismatch.
     """
-    r = httpx.post(
-        GATEWAY_EMBED_URL,
-        json={"text": text, "task_type": task_type},
-        timeout=60,
-    )
-    r.raise_for_status()
-    data = r.json()
-    vec = data["embedding"]
-    if len(vec) != EMBED_DIM:
-        raise RuntimeError(
-            f"Expected {EMBED_DIM}-dim embedding, got {len(vec)} "
-            f"(provider={data.get('provider')}, model={data.get('model')})"
-        )
-    return vec
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = httpx.post(
+                GATEWAY_EMBED_URL,
+                json={"text": text, "task_type": task_type, "provider": "ollama"},
+                timeout=60,
+            )
+            if r.status_code == 503 and attempt < max_retries:
+                wait = 2 ** attempt
+                print(f"[embedder] 503 on attempt {attempt}/{max_retries} — retrying in {wait}s …")
+                _time.sleep(wait)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            vec = data["embedding"]
+            if len(vec) != EMBED_DIM:
+                raise RuntimeError(
+                    f"Expected {EMBED_DIM}-dim embedding, got {len(vec)} "
+                    f"(provider={data.get('provider')}, model={data.get('model')})"
+                )
+            return vec
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            if attempt < max_retries:
+                wait = 2 ** attempt
+                print(f"[embedder] {exc.__class__.__name__} on attempt {attempt}/{max_retries} — retrying in {wait}s …")
+                _time.sleep(wait)
+            else:
+                raise
 
 
 def _normalise(v: np.ndarray) -> np.ndarray:
@@ -103,7 +119,7 @@ def build_index(chunks: list[dict]) -> IndexStore:
             if (i + 1) % 10 == 0 or i == len(chunks) - 1:
                 print(f"[embedder]   {i + 1}/{len(chunks)} embedded")
             # Small pause to respect rate limits on the fallback (Gemini: 5 RPM / 5 s cooldown)
-            time.sleep(0.1)
+            _time.sleep(0.1)
         except Exception as exc:
             print(f"[embedder] ERROR embedding chunk {chunk['chunk_id']}: {exc}")
             # Use a zero vector as placeholder; it will never be the top result
