@@ -33,36 +33,36 @@ EXAMPLE QUESTIONS (replace these with facts from YOUR documents):
 TEST_QUESTIONS = [
     # Question 1 — direct / literal (vocabulary shared with document)
     {
-        "question": "REPLACE_ME: e.g. What learning rate was used during training?",
-        "expected": ["REPLACE_ME"],   # e.g. ["0.001"]
+        "question": "What are the three specific advantages of the Feature Adaptation Network (FAN) over conventional FSR as listed in the text?",
+        "expected": ["joint learning scheme", "training with paired/unpaired data", "alleviating background/PIE"],
         "semantic": False,
     },
 
     # Question 2 — direct / literal
     {
-        "question": "REPLACE_ME: e.g. What dataset was used for evaluation?",
-        "expected": ["REPLACE_ME"],   # e.g. ["imagenet"]
+        "question": "According to the document's breakdown of Faster R-CNN, how many anchors are present at the position (320, 320) of an image with size (600, 800)?",
+        "expected": ["9", "nine"],   
         "semantic": False,
     },
 
     # Question 3 — direct / literal
     {
-        "question": "REPLACE_ME: e.g. How many parameters does the model have?",
-        "expected": ["REPLACE_ME"],   # e.g. ["175b", "175 billion"]
+        "question": "According to the document's explanation of the Bag-of-Words model, what are the exact integer vectors generated for the sentences 'It is going to rain today' and 'Today I am not going outside'?",
+        "expected": ["REPLACE_WITH_EXACT_VECTOR_1", "REPLACE_WITH_EXACT_VECTOR_2"], # Replace with the exact array values from your document
         "semantic": False,
     },
 
     # Question 4 — SEMANTIC (question vocabulary ≠ document vocabulary)
     {
-        "question": "REPLACE_ME: e.g. What mechanism prevented the network from over-relying on specific neurons?",
-        "expected": ["REPLACE_ME"],   # e.g. ["dropout", "0.5"]
+        "question": "How does the document explain the concept of penalizing a predictive model for including useless predictor variables?",
+        "expected": ["Adjusted R-Square", "junk independent variable"],   
         "semantic": True,
     },
 
     # Question 5 — SEMANTIC (question vocabulary ≠ document vocabulary)
     {
-        "question": "REPLACE_ME: e.g. What numerical threshold separates the two performance tiers described?",
-        "expected": ["REPLACE_ME"],   # e.g. ["0.85", "85%"]
+        "question": "What specific dataset was assembled by gathering internet clips of people making physical mistakes, and what was the main self-guided learning objective used to analyze it?",
+        "expected": ["Oops!", "predict the speed of the video", "fail videos"],   
         "semantic": True,
     },
 ]

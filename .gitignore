@@ -31,3 +31,6 @@ Thumbs.db
 # FAISS generated files (if any)
 *.faiss
 index.pkl
+
+# Documents
+docs/*.pdf
