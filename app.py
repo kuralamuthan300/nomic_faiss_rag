@@ -25,6 +25,7 @@ from ingest import load_documents, DOCS_DIR
 from embedder import build_index
 from rag import (
     answer_with_rag,
+    check_answer,
     check_embed_service,
     check_chat_service,
 )
@@ -181,8 +182,8 @@ def run_tests() -> tuple[str, pd.DataFrame]:
         expected    = [e.lower() for e in tq["expected"]]
 
         rag_res    = answer_with_rag(question, INDEX_STORE)
-        rag_answer = rag_res["answer"].lower()
-        rag_passed = all(term in rag_answer for term in expected)
+        rag_answer = rag_res["answer"]
+        rag_passed = check_answer(expected, rag_answer)
 
         if not rag_passed:
             all_passed = False

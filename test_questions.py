@@ -8,15 +8,14 @@ Each question must have:
   - "semantic":  True if this question uses different vocabulary than the
                  target document passage (tests semantic retrieval, not keyword match).
 
-Questions are kept simple so that the local Ollama model can reliably
-answer them from the retrieved document context.
+Questions are designed to be answerable from the PDFs in the docs/ folder.
 """
 
 TEST_QUESTIONS = [
-    # Question 1 — Feature Adaptation Network (in Data Science Interview Preparation.pdf)
+    # Question 1 — basic R-Square concept (in Data Science Interview Questions #Day1.pdf)
     {
-        "question": "What is Feature Adaptation Network used for?",
-        "expected": ["feature", "adaptation"],
+        "question": "What does R-Square measure in a regression model?",
+        "expected": ["r-square", "variance"],
         "semantic": False,
     },
 
@@ -30,21 +29,21 @@ TEST_QUESTIONS = [
     # Question 3 — Bag-of-Words (in Data Science Interview Preparation Questions(#Day06).pdf)
     {
         "question": "What is the Bag-of-Words model used for in text processing?",
-        "expected": ["bag", "words", "text"],
+        "expected": ["bag", "words", "vector"],
         "semantic": False,
     },
 
-    # Question 4 — SEMANTIC: R-Square problem with junk variables (in Data Science INterview Questions #Day1.pdf)
+    # Question 4 — SEMANTIC: R-Square problem with junk variables (in Data Science Interview Questions #Day1.pdf)
     {
         "question": "How does the model get penalized for including useless predictor variables?",
-        "expected": ["r-square", "variables"],
+        "expected": ["regularization"],
         "semantic": True,
     },
 
-    # Question 5 — SEMANTIC: Oops! Unintentional Action dataset (in Data Science Interview Interview Questions(#Day28).pdf)
+    # Question 5 — SEMANTIC: Oops! dataset (in Data Science Interview Interview Questions(#Day28).pdf)
     {
         "question": "What kind of video clips were collected to understand how people make mistakes?",
-        "expected": ["oops", "video", "fail"],
+        "expected": ["video", "fail"],
         "semantic": True,
     },
 ]

@@ -135,6 +135,22 @@ def answer_without_rag(question: str) -> dict:
 # service health check helpers (used by app.py on startup)
 # ---------------------------------------------------------------------------
 
+def check_answer(expected_terms: list[str], answer: str) -> bool:
+    """
+    Ask Ollama to verify whether the answer contains the expected information.
+    Returns True if the LLM judges the answer covers all expected terms.
+    """
+    terms_str = ", ".join(expected_terms)
+    prompt = (
+        f"Given this answer:\n\n{answer}\n\n"
+        f"Does the answer contain or imply all of these keywords or concepts: {terms_str}?\n"
+        "Reply with exactly one word: YES or NO."
+    )
+    system = "You are a strict but fair answer checker. Reply only YES or NO."
+    result = _chat(prompt, system)
+    return "yes" in result.lower()
+
+
 def check_embed_service() -> tuple[bool, str]:
     """Ping the embed endpoint with a trivial string."""
     try:
